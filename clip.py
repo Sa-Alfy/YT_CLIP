@@ -15,7 +15,7 @@ Pipeline for one clip:
 
 Commentary track: pass --commentary <audio file> of the same length
 as the clip, or set commentary.enabled: true + commentary.audio in
-config.yaml — the game audio is ducked to 45% under it. Without it
+config.yaml — the source audio is ducked to 45% under it. Without it
 the clip ships with source audio only (and the digest says so).
 
 v1.1 hardening (GPT review, 2026-11-19):
@@ -36,7 +36,7 @@ v1.1 hardening (GPT review, 2026-11-19):
 
 Usage:
     python clip.py --url <youtube-url> --start 65 --end 110 \\
-        --hook "KAI CENAT LOSES IT" --out kai-cenat-gta6-01
+        --hook "KAI CENAT LOSES IT" --out kai-cenat-01
 """
 import argparse
 import glob
@@ -271,8 +271,8 @@ def transcribe(segment_path, srt_path, model, language, transcribe_py,
                timeout):
     """faster-whisper -> SRT. Runs in the shared transcribe venv.
 
-    The language is set explicitly (no auto-detect — game audio plus
-    streamer chatter confuses detection). NOTE: the model is loaded
+    The language is set explicitly (no auto-detect — background audio
+    plus chatter confuses detection). NOTE: the model is loaded
     once per clip.py process, i.e. once per clip in a pipeline run;
     a persistent transcription worker would avoid the reload, but
     the tiny model loads in seconds on this box. Never run
@@ -484,7 +484,7 @@ def verify(path, expected, timeouts):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Cut one vertical GTA 6 clip.")
+    ap = argparse.ArgumentParser(description="Cut one vertical clip.")
     ap.add_argument("--url", required=True)
     ap.add_argument("--start", type=float, required=True)
     ap.add_argument("--end", type=float, required=True)
@@ -527,7 +527,7 @@ def main():
         commentary = resolve_commentary(args, cfg)
         if commentary:
             print(f"  commentary: {commentary} "
-                  "(game audio ducked to 45%)")
+                  "(source audio ducked to 45%)")
 
         # --- Window (rounded explicitly; yt-dlp truncates floats) ---
         start_i, end_i = int(round(args.start)), int(round(args.end))

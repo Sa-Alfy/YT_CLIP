@@ -61,8 +61,8 @@ FAKE_TW = [
      "age_hours": 2.0},
 ]
 
-discover.youtube_candidates = lambda cfg: list(FAKE_YT)
-discover.twitch_candidates = lambda cfg: list(FAKE_TW)
+discover.youtube_candidates = lambda cfg, topic=None: list(FAKE_YT)
+discover.twitch_candidates = lambda cfg, topic=None: list(FAKE_TW)
 
 captured = []
 orig_run = procutil.run

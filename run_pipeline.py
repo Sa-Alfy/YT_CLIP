@@ -3,10 +3,17 @@
 
 Usage:
     python run_pipeline.py [--config config.yaml] [--clips 3] [--dry-run]
-                           [--no-subtitles]
+                           [--no-subtitles] [--topic "Minecraft"]
 
 --dry-run only runs discovery and prints what it WOULD clip.
 The digest is written to digest-YYYY-MM-DD.md in the pipeline root.
+
+--topic picks the subject: a preset name (gta6 — the default) or any
+new topic (e.g. Minecraft, street food). Search terms are derived
+from the topic name, creators default to none (term search only),
+and the Twitch game defaults to the topic name; see
+discover.resolve_topic() and README.md. GTA 6 stays the default
+preset, so a run with no --topic behaves exactly as before.
 
 v1.1 hardening (GPT review, 2026-11-19):
 - Run lock (run.lock, fcntl): a second run refuses to start while one
@@ -27,6 +34,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -102,11 +110,12 @@ def pick_window(cand, length_s):
     YouTube: Method A — heatmap peak (most-replayed); Method B — fixed
     window when no heatmap exists. Long VODs (>1h, e.g. marathon
     livestreams) start at 1800s: the first ~30 minutes are loading
-    screens, menus and intros (verified on the v1 run — the 60s window
-    showed only the GTA VI loading screen, the 600s window the PS5 home
-    screen / Rockstar logo; probe.py frames at 1800s confirmed real
-    gameplay for the top picks). Shorter videos start at 60s (10s if
-    the video is short). The method is recorded per clip in the digest.
+    screens, menus and intros, not the content itself (verified on the
+    GTA VI launch-day run — the 60s window showed only the loading
+    screen, the 600s window the PS5 home screen / Rockstar logo;
+    probe.py frames at 1800s confirmed real gameplay for the top
+    picks). Shorter videos start at 60s (10s if the video is short).
+    The method is recorded per clip in the digest.
     """
     dur = cand["duration_s"]
     if cand.get("platform") == "twitch":
@@ -131,14 +140,24 @@ def pick_window(cand, length_s):
         "is actually playing)")
 
 
-def hook_from_title(title, uploader):
-    """Short punchy hook for the first frames (<= ~30 chars)."""
+def hook_from_title(title, uploader, topic=None):
+    """Short punchy hook for the first frames (<= ~30 chars).
+
+    The topic name (and its known variants, e.g. "GTA VI" for the
+    GTA 6 preset) is stripped — titles usually contain it and the
+    hook is punchier without it. Falls back to "<UPLOADER> PLAYS
+    <TOPIC>" when nothing is left.
+    """
+    topic = topic or {"name": "GTA 6", "hook_strip": ["GTA 6"]}
+    name = topic.get("name") or "GTA 6"
     hook = (title or "").strip()
     # Take only the first pipe-separated segment ("NO PROMOTIONS" style
     # disclaimers after a | must never become the hook).
     hook = hook.split("|")[0]
-    for junk in ("GTA 6", "GTA VI", "Grand Theft Auto VI", "GTA6"):
-        hook = hook.replace(junk, "")
+    # Case-insensitive strip: titles shout the topic in any case
+    # ("MINECRAFT", "Minecraft", "minecraft").
+    for junk in topic.get("hook_strip") or [name]:
+        hook = re.sub(re.escape(junk), "", hook, flags=re.IGNORECASE)
     hook = " ".join(hook.split()).strip(" -:|•·")
     if len(hook) > 30:
         hook = hook[:30].rsplit(" ", 1)[0]
@@ -146,7 +165,7 @@ def hook_from_title(title, uploader):
     # (e.g. "WALKTHROUGH GAMEPLAY PART 1 -").
     hook = hook.strip(" -:|•·")
     if not hook:
-        hook = f"{uploader.upper()} PLAYS GTA 6"
+        hook = f"{uploader.upper()} PLAYS {name.upper()}"
     return hook.upper()
 
 
@@ -155,13 +174,25 @@ def slug(name):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Run the GTA 6 clip pipeline.")
+    ap = argparse.ArgumentParser(
+        description="Run the viral clip pipeline (any topic; "
+                    "GTA 6 is the default preset).")
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--clips", type=int, default=3, help="How many clips to make.")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-subtitles", action="store_true",
                     help="Ship hook-only clips (explicit choice; skips the "
                          "transcription preflight).")
+    ap.add_argument("--topic", default=None,
+                    help="Topic to clip: a preset name (gta6) or any new "
+                         "topic (e.g. Minecraft, street food). Default: "
+                         "the config's topic block, else the gta6 preset.")
+    ap.add_argument("--game", default=None,
+                    help="Twitch game-name override (empty string = skip "
+                         "Twitch for this run).")
+    ap.add_argument("--creators", default=None,
+                    help="Comma-separated creator list override "
+                         "(empty string = no creator search).")
     args = ap.parse_args()
 
     try:
@@ -195,6 +226,12 @@ def run_locked(args, cfg, root, run_id):
     os.makedirs(seg_dir, exist_ok=True)
     print(f"Run id: {run_id} (segments in {seg_dir})")
 
+    topic = discover.resolve_topic(cfg, args)
+    print(f"Topic: {topic['name']} ({topic['source']})")
+    print(f"  search terms: {topic['search_terms']}")
+    print(f"  creators: {topic['creators'] or '(none — term search only)'}")
+    print(f"  Twitch game: {topic['twitch_game'] or '(none — YouTube-only)'}")
+
     # --- Transcription preflight, BEFORE discovery ---
     # If subtitles are enabled but the model is not cached, fail the
     # run loudly now instead of building hook-only clips silently.
@@ -209,25 +246,27 @@ def run_locked(args, cfg, root, run_id):
             return exc.code if isinstance(exc.code, int) else 2
 
     print("== Discovery ==")
-    yt = discover.youtube_candidates(cfg)
+    yt = discover.youtube_candidates(cfg, topic)
     print(f"  {len(yt)} YouTube candidates")
     print("== Heatmap peaks (from full metadata) ==")
     for cand in yt[:5]:
         print(f"  {cand['video_id']}: peak={cand.get('heatmap_peak')}")
-    tw = discover.twitch_candidates(cfg)
+    tw = discover.twitch_candidates(cfg, topic)
     print(f"  {len(tw)} Twitch clips")
 
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M")
     disc_path = os.path.join(cfg["paths"]["discovery"], f"discovery-{stamp}.json")
     with open(disc_path, "w", encoding="utf-8") as fh:
         json.dump({"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                   "topic": {"name": topic["name"], "source": topic["source"]},
                    "youtube": yt, "twitch": tw}, fh, ensure_ascii=False, indent=2)
     print(f"Wrote {disc_path}")
 
-    # Exclude videos that probing showed are not gameplay in the window
-    # (e.g. pre-launch countdown streams). Listed in config.yaml with
-    # the reason; the next-ranked candidate takes the slot.
-    excluded = set(cfg.get("exclude_video_ids") or [])
+    # Exclude videos that probing showed are not the content in the
+    # window (e.g. pre-launch countdown streams). Listed in the
+    # topic/preset with the reason; the next-ranked candidate takes
+    # the slot.
+    excluded = set(topic.get("exclude_video_ids") or [])
     yt = [c for c in yt if c.get("video_id") not in excluded]
     if excluded:
         print(f"  excluded {len(excluded)} video(s) per config: "
@@ -248,7 +287,7 @@ def run_locked(args, cfg, root, run_id):
     length = cfg["clips"]["length_s"]
     for cand in picks:
         start, end, method = pick_window(cand, length)
-        hook = hook_from_title(cand["title"], cand["uploader"])
+        hook = hook_from_title(cand["title"], cand["uploader"], topic)
         out = (f"{datetime.now(timezone.utc).strftime('%Y%m%d')}-"
                f"{slug(cand['uploader'])}-{slug(cand['title'])}")
         print(f"\n== Clip: [{cand.get('platform', '?')}] {cand['uploader']} "
@@ -292,16 +331,19 @@ def run_locked(args, cfg, root, run_id):
     cleanup_run_segments(seg_base_dir, run_id)
 
     digest_path = f"digest-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.md"
-    write_digest(digest_path, yt, tw, results, cfg)
+    write_digest(digest_path, yt, tw, results, cfg, topic)
     print(f"Wrote {digest_path}")
     return 0
 
 
-def write_digest(path, yt, tw, results, cfg):
+def write_digest(path, yt, tw, results, cfg, topic=None):
+    topic = topic or {"name": "GTA 6", "source": "preset:gta6 (default)",
+                      "twitch_game": "Grand Theft Auto VI"}
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     lines = [
-        f"# GTA 6 clip pipeline — digest {date}",
+        f"# {topic['name']} clip pipeline — digest {date}",
         "",
+        f"Topic: {topic['name']} ({topic['source']}). "
         f"Generated {datetime.now(timezone.utc).isoformat(timespec='seconds')} UTC. "
         f"Ranked by views/hour (views / hours since upload).",
         "",
@@ -342,19 +384,26 @@ def write_digest(path, yt, tw, results, cfg):
                          f"{c['views']:,} views, "
                          f"{c['views_per_hour'] or 0:,.0f} v/h")
     else:
-        lines += ["",
-                  "## Twitch",
-                  "",
-                  "Skipped — no Twitch API keys in config.yaml. "
-                  "Add client_id/client_secret to enable Helix top-clips discovery.",
-                  ""]
+        tw_cfg = cfg.get("twitch") or {}
+        if not (tw_cfg.get("client_id") or "").strip() or \
+                not (tw_cfg.get("client_secret") or "").strip():
+            tw_note = ("Skipped — no Twitch API keys in config.yaml. "
+                       "Add client_id/client_secret to enable Helix "
+                       "top-clips discovery.")
+        elif not (topic.get("twitch_game") or "").strip():
+            tw_note = (f"Skipped — topic {topic['name']!r} has no Twitch "
+                       "game (YouTube-only topic).")
+        else:
+            tw_note = (f"Twitch lookup for game "
+                       f"{topic.get('twitch_game')!r} found no clips.")
+        lines += ["", "## Twitch", "", tw_note, ""]
     lines += ["",
               "## Notes",
               "",
               "- Format: commentary/reaction clips (source audio only in v1; "
               "commentary mix is a defined step — set commentary.enabled "
               "+ commentary.audio in config.yaml or pass --commentary to "
-              "clip.py; the game audio is ducked to 45% under it). "
+              "clip.py; the source audio is ducked to 45% under it). "
               "Straight re-uploads of creators' clips risk copyright strikes.",
               "- Posting destination not chosen yet — clips are NOT posted anywhere.",
               "- v1.1: run lock (run.lock), per-run segment dirs, subprocess "

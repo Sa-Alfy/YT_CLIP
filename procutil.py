@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared subprocess helper for the GTA 6 clip pipeline.
+"""Shared subprocess helper for the viral clip pipeline.
 
 Every subprocess call in the pipeline goes through run(): it enforces
 a timeout and, on timeout, kills the WHOLE process group. yt-dlp and

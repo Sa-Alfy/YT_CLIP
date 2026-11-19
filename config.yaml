@@ -1,27 +1,89 @@
-# GTA 6 viral clip pipeline — config
+# Viral clip pipeline — config
 # Copy to config.local.yaml and edit for your own run; config.yaml ships with defaults.
 
-search_terms:
-  - "GTA 6 gameplay"
-  - "GTA VI gameplay"
+# Topic: what this config discovers. Any subject works — a game, a
+# hobby, a place, a food. --topic on the command line overrides this
+# block; without it, the gta6 preset below is the default.
+#   name          — the topic, used to build search terms and hooks.
+#   search_terms  — explicit YouTube search terms. If omitted, terms
+#                   are derived: the name plus "<name> gameplay" and
+#                   "<name> walkthrough", plus extra_terms.
+#   creators      — creator watchlist; discovery also searches
+#                   "<name> <creator>" per creator. Empty = term
+#                   search only (no creator search).
+#   twitch_game   — Twitch game/category name. Blank ("") = YouTube-
+#                   only; Twitch is skipped gracefully.
+#   hook_strip    — words stripped from video titles when building the
+#                   hook (defaults to the topic name).
+#   exclude_video_ids — YouTube IDs to skip (see the note below).
+topic:
+  name: "GTA 6"
+  search_terms:
+    - "GTA 6 gameplay"
+    - "GTA VI gameplay"
+  creators:
+    - Kai Cenat
+    - IShowSpeed
+    - caseoh_
+    - Valkyrae
+    - StableRonaldo
+    - TheBurntPeanut
+    - ElMariana
+    - DarkViperAU
+    - Caylus
+    - Jelly
+    - Rivers
+    - Jake Baldino
+    - Cinna
+    - Payal Gaming
+  twitch_game: "Grand Theft Auto VI"
+  hook_strip:
+    - "GTA 6"
+    - "GTA VI"
+    - "Grand Theft Auto VI"
+    - "GTA6"
+  # Videos to skip when picking clips (YouTube video IDs). Add a video
+  # here after probing shows its window is not gameplay — the next-
+  # ranked candidate takes its slot. probe.py verifies windows.
+  # - KsNI7DeozPA (DarkViperAU, "The BEST GTA VI LAUNCH..."):
+  #   pre-launch countdown stream; at 1800s it still showed a
+  #   "releases in 0:39:43" countdown, at 4800s the in-game settings
+  #   menu. No gameplay in the first ~80 min, so it is excluded.
+  exclude_video_ids:
+    - KsNI7DeozPA
 
-# Creator watchlist for discovery (YouTube search per creator).
-# These are the big launch-day names; add/remove freely.
-creators:
-  - Kai Cenat
-  - IShowSpeed
-  - caseoh_
-  - Valkyrae
-  - StableRonaldo
-  - TheBurntPeanut
-  - ElMariana
-  - DarkViperAU
-  - Caylus
-  - Jelly
-  - Rivers
-  - Jake Baldino
-  - Cinna
-  - Payal Gaming
+# Named presets. --topic <name> loads that preset whole (CLI
+# --creators / --game still override individual fields). `gta6` is
+# the default preset and holds the exact launch-day values.
+presets:
+  gta6:
+    name: "GTA 6"
+    search_terms:
+      - "GTA 6 gameplay"
+      - "GTA VI gameplay"
+    creators:
+      - Kai Cenat
+      - IShowSpeed
+      - caseoh_
+      - Valkyrae
+      - StableRonaldo
+      - TheBurntPeanut
+      - ElMariana
+      - DarkViperAU
+      - Caylus
+      - Jelly
+      - Rivers
+      - Jake Baldino
+      - Cinna
+      - Payal Gaming
+    twitch_game: "Grand Theft Auto VI"
+    hook_strip:
+      - "GTA 6"
+      - "GTA VI"
+      - "Grand Theft Auto VI"
+      - "GTA6"
+    exclude_video_ids:
+      - KsNI7DeozPA
 
 discovery:
   search_results: 12        # results per search term
@@ -30,16 +92,6 @@ discovery:
   min_duration_s: 60        # skip videos shorter than this
   full_fetch_limit: 40      # full metadata fetches (top N by raw views)
   sleep_between_searches_s: 1.0
-
-# Videos to skip when picking clips (YouTube video IDs). Add a video here
-# after probing shows its window is not gameplay — the next-ranked
-# candidate takes its slot. probe.py verifies windows before a run.
-# - KsNI7DeozPA (DarkViperAU, "The BEST GTA VI LAUNCH..."): pre-launch
-#   countdown stream; at 1800s it still showed a "releases in 0:39:43"
-#   countdown, at 4800s the in-game settings menu. No gameplay in the
-#   first ~80 min, so it is excluded from v1 picks.
-exclude_video_ids:
-  - KsNI7DeozPA
 
 clips:
   length_s: 45              # target clip length (30-60)
@@ -72,19 +124,19 @@ paths:
   # Python with faster-whisper installed (shared transcribe venv).
   transcribe_venv_python: ~/workspace/transcribe-venv/bin/python
 
-# Twitch Helix discovery (top clips in the GTA VI category).
+# Twitch Helix discovery (top clips for the topic's game).
 # Leave blank to skip Twitch gracefully — no data is faked.
 # Get keys at https://dev.twitch.tv/console (free).
+# The GAME name comes from the topic (topic.twitch_game), not here.
 twitch:
   client_id: ""
   client_secret: ""
-  game_name: "Grand Theft Auto VI"
   top_clips: 10
 
 # Commentary / reaction track (the format that keeps a clip channel alive).
 # v1 ships clips with source audio only; a commentary track is mixed in
 # here once recorded. Set enabled: true and point `audio` at a WAV/MP3
-# of the same length as the clip, and clip.py will duck the game audio
+# of the same length as the clip, and clip.py will duck the source audio
 # under it. See README.md.
 commentary:
   enabled: false

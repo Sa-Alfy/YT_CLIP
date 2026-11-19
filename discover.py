@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
-"""Discovery stage: find viral GTA 6 gameplay on YouTube (no API key needed).
+"""Discovery stage: find viral clips on any topic on YouTube (no API key needed).
 
 Sources
-- YouTube: yt-dlp `ytsearch` over the configured search terms plus a
-  per-creator search over the watchlist. Candidates are ranked by
-  views/hour (views / hours since upload).
-- Twitch: Helix API top clips for the GTA VI category — ONLY when
-  client_id/client_secret are set in config.yaml. Without keys the
-  Twitch stage is skipped and says so; no data is ever faked.
+- YouTube: yt-dlp `ytsearch` over the active topic's search terms
+  plus a per-creator search over the topic's watchlist. Candidates
+  are ranked by views/hour (views / hours since upload).
+- Twitch: Helix API top clips for the topic's game — ONLY when
+  client_id/client_secret are set in config.yaml. Without keys, or
+  when the topic has no Twitch game, the Twitch stage is skipped and
+  says so; no data is ever faked.
+
+The active topic comes from discover.resolve_topic(): a --topic CLI
+flag, else the config's topic: block, else the gta6 preset. Any
+subject works — a game, a hobby, a place, a food.
 
 Outputs (into <pipeline>/discovery/):
 - discovery-YYYY-MM-DD-HHMM.json — ranked candidates with full metadata
@@ -15,6 +20,7 @@ Outputs (into <pipeline>/discovery/):
 
 Usage:
     python discover.py [--config config.yaml] [--out discovery]
+                       [--topic "Minecraft"]
 """
 import argparse
 import json
@@ -38,6 +44,107 @@ def load_config(path):
         return yaml.safe_load(fh)
 
 
+def resolve_topic(cfg, args=None):
+    """Resolve the active topic. Precedence: CLI flags > config topic
+    block > gta6 preset. Returns a dict with keys: name, search_terms,
+    creators, twitch_game, hook_strip, exclude_video_ids, source.
+
+    - --topic <preset name> loads presets.<name> whole (e.g. gta6).
+    - --topic <anything else> builds an ad-hoc topic from the name:
+      search terms are the name plus "<name> gameplay" and "<name>
+      walkthrough" (plus extra_terms), creators are empty (term search
+      only) unless --creators is given, and the Twitch game defaults
+      to the topic name (a non-game topic simply finds no game and
+      Twitch is skipped gracefully).
+    - A topic block may define `suffixes:` to replace the default
+      ["gameplay", "walkthrough"] derivation, and `extra_terms:` for
+      additional literal search terms (used only when search_terms
+      is not set explicitly).
+    - Legacy configs without topic:/presets: fall back to the old
+      top-level search_terms / creators / exclude_video_ids and
+      twitch.game_name keys (pre-topic configs, e.g. the v1.1 test
+      configs keep working unchanged).
+    """
+    args = args or argparse.Namespace(topic=None, game=None, creators=None)
+    cli_topic = getattr(args, "topic", None)
+    cli_game = getattr(args, "game", None)
+    cli_creators = getattr(args, "creators", None)
+    presets = cfg.get("presets") or {}
+
+    if cli_topic:
+        if cli_topic in presets:
+            topic = dict(presets[cli_topic])
+            source = f"preset:{cli_topic}"
+        else:
+            topic = {"name": cli_topic}
+            source = "ad-hoc"
+    elif cfg.get("topic"):
+        topic = dict(cfg["topic"])
+        source = "config topic block"
+    elif presets.get("gta6"):
+        topic = dict(presets["gta6"])
+        source = "preset:gta6 (default)"
+    else:
+        # Legacy config: no topic:/presets: at all.
+        terms = list(cfg.get("search_terms") or [])
+        if not terms:
+            raise ValueError(
+                "config has no topic: block, no presets.gta6, and no "
+                "legacy search_terms — set topic: or presets: in "
+                "config.yaml, or pass --topic <name>")
+        return {
+            "name": "GTA 6",
+            "search_terms": terms,
+            "creators": list(cfg.get("creators") or []),
+            "twitch_game": ((cfg.get("twitch") or {}).get("game_name")
+                            or "Grand Theft Auto VI"),
+            "hook_strip": ["GTA 6", "GTA VI", "Grand Theft Auto VI",
+                           "GTA6"],
+            "exclude_video_ids": list(cfg.get("exclude_video_ids") or []),
+            "source": "legacy top-level keys",
+        }
+
+    # CLI overrides (apply to preset, config-block and ad-hoc topics).
+    if cli_creators is not None:
+        topic["creators"] = [c.strip() for c in cli_creators.split(",")
+                             if c.strip()]
+    if cli_game is not None:
+        topic["twitch_game"] = cli_game
+
+    name = (topic.get("name") or "").strip() or "GTA 6"
+    topic["name"] = name
+    if not topic.get("search_terms"):
+        suffixes = topic.get("suffixes") or ["gameplay", "walkthrough"]
+        terms = [name] + [f"{name} {s}" for s in suffixes]
+        terms += list(topic.get("extra_terms") or [])
+        topic["search_terms"] = terms
+    topic["creators"] = list(topic.get("creators") or [])
+    if "twitch_game" not in topic or topic["twitch_game"] is None:
+        # No game named for this topic: default to the topic name
+        # ("Minecraft" IS the Twitch game name). A non-game topic
+        # finds no game and Twitch is skipped gracefully. An explicit
+        # twitch_game: "" in the topic means YouTube-only.
+        topic["twitch_game"] = name
+    topic["hook_strip"] = list(topic.get("hook_strip") or [name])
+    topic["exclude_video_ids"] = list(topic.get("exclude_video_ids") or [])
+    topic["source"] = source
+    return topic
+
+
+def build_queries(topic, disc):
+    """(search term, result count) pairs for the active topic.
+
+    Term searches use the topic's search_terms; creator searches use
+    "<topic name> <creator>". An empty creator list means term search
+    only — no creator queries are built.
+    """
+    queries = [(t, disc["search_results"]) for t in topic["search_terms"]]
+    for creator in topic.get("creators") or []:
+        queries.append((f"{topic['name']} {creator}",
+                        disc["creator_results"]))
+    return queries
+
+
 def age_hours(entry):
     """Hours since upload, from yt-dlp 'timestamp' (unix) when present."""
     ts = entry.get("timestamp")
@@ -59,7 +166,7 @@ def search_youtube(ydl, query, n):
     return (info or {}).get("entries") or []
 
 
-def youtube_candidates(cfg):
+def youtube_candidates(cfg, topic=None):
     """Collect + rank YouTube candidates by views/hour.
 
     Flat search entries lack upload timestamps, so after dedupe we fetch
@@ -68,6 +175,7 @@ def youtube_candidates(cfg):
     fetch also carries the most-replayed heatmap, which is stored on the
     candidate for moment selection.
     """
+    topic = topic or resolve_topic(cfg)
     disc = cfg["discovery"]
     ydl_opts = {
         "quiet": True,
@@ -77,9 +185,7 @@ def youtube_candidates(cfg):
         "socket_timeout": 30,
         "retries": 3,
     }
-    queries = [(t, disc["search_results"]) for t in cfg["search_terms"]]
-    for creator in cfg["creators"]:
-        queries.append((f"GTA 6 {creator}", disc["creator_results"]))
+    queries = build_queries(topic, disc)
 
     seen = {}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -144,8 +250,13 @@ def youtube_candidates(cfg):
     return ranked
 
 
-def twitch_candidates(cfg):
-    """Top Twitch clips for the GTA VI category (Helix). Skips without keys."""
+def twitch_candidates(cfg, topic=None):
+    """Top Twitch clips for the topic's game (Helix).
+
+    Skips without keys, and skips when the topic has no Twitch game
+    (twitch_game blank = YouTube-only topic). Never fakes data.
+    """
+    topic = topic or resolve_topic(cfg)
     tw = cfg.get("twitch") or {}
     cid = (tw.get("client_id") or "").strip()
     secret = (tw.get("client_secret") or "").strip()
@@ -155,6 +266,12 @@ def twitch_candidates(cfg):
         return []
 
     import requests
+
+    game_name = (topic.get("twitch_game") or "").strip()
+    if not game_name:
+        print(f"Twitch: topic {topic['name']!r} has no Twitch game "
+              "— skipping Twitch discovery (YouTube-only topic).")
+        return []
 
     token = requests.post(
         "https://id.twitch.tv/oauth2/token",
@@ -166,11 +283,11 @@ def twitch_candidates(cfg):
         return []
     headers = {"Client-Id": cid, "Authorization": f"Bearer {token}"}
     game = requests.get("https://api.twitch.tv/helix/games",
-                        params={"name": tw.get("game_name", "Grand Theft Auto VI")},
+                        params={"name": game_name},
                         headers=headers, timeout=30).json()
     games = game.get("data") or []
     if not games:
-        print(f"Twitch: game {tw.get('game_name')!r} not found — skipping.")
+        print(f"Twitch: game {game_name!r} not found — skipping.")
         return []
     clips = requests.get(
         "https://api.twitch.tv/helix/clips",
@@ -200,18 +317,31 @@ def twitch_candidates(cfg):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Discover viral GTA 6 gameplay.")
+    ap = argparse.ArgumentParser(description="Discover viral clips on any topic.")
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--out", default="discovery")
+    ap.add_argument("--topic", default=None,
+                    help="Topic to discover (a preset name like gta6, or any "
+                         "new topic such as Minecraft — search terms are "
+                         "derived from the name). Default: the config's "
+                         "topic block, else the gta6 preset.")
+    ap.add_argument("--game", default=None,
+                    help="Twitch game-name override (empty string = skip "
+                         "Twitch for this run).")
+    ap.add_argument("--creators", default=None,
+                    help="Comma-separated creator list override "
+                         "(empty string = no creator search).")
     ap.add_argument("--heatmap-top", type=int, default=5,
                     help="Fetch most-replayed heatmap for the top N YouTube candidates.")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
+    topic = resolve_topic(cfg, args)
+    print(f"Topic: {topic['name']} ({topic['source']})")
     os.makedirs(args.out, exist_ok=True)
 
     print("== YouTube discovery ==")
-    yt = youtube_candidates(cfg)
+    yt = youtube_candidates(cfg, topic)
     print(f"  {len(yt)} candidates in the last {cfg['discovery']['max_age_hours']}h")
 
     print(f"== Heatmap peaks (from full metadata) ==")
@@ -219,11 +349,12 @@ def main():
         print(f"  {cand['video_id']}: peak={cand.get('heatmap_peak')}")
 
     print("== Twitch discovery ==")
-    tw = twitch_candidates(cfg)
+    tw = twitch_candidates(cfg, topic)
     print(f"  {len(tw)} Twitch clips")
 
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M")
     payload = {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               "topic": {"name": topic["name"], "source": topic["source"]},
                "youtube": yt, "twitch": tw}
     out_path = os.path.join(args.out, f"discovery-{stamp}.json")
     with open(out_path, "w", encoding="utf-8") as fh:

@@ -1,9 +1,43 @@
-# GTA 6 Viral Clip Pipeline (v1.1)
+# Viral Clip Pipeline (v1.2 — topics)
 
-Finds viral GTA 6 gameplay from famous creators on YouTube (and Twitch,
-when API keys are present), cuts short vertical clips with a hook and
+Finds viral moments on **any topic** on YouTube (and Twitch, when
+API keys are present), cuts short vertical clips with a hook and
 subtitles, and produces a review digest. Nothing is posted anywhere —
 clips are built for human review and approval first.
+
+GTA 6 is the default preset and the worked example below — the
+pipeline was built for the GTA VI launch (2026-11-19) — but the
+topic is now a flag, not a hardcoded subject:
+
+```bash
+./venv/bin/python run_pipeline.py --topic "Minecraft" --clips 3 --dry-run
+./venv/bin/python run_pipeline.py --topic "street food" --clips 3
+```
+
+See [Topics](#topics) for how `--topic` works, and the limits that
+still apply (Twitch needs a game name; moment selection is still the
+fixed window — see [Moment selection](#moment-selection)).
+
+## v1.2 topics (2026-11-19)
+
+- **`--topic <name>`**: a preset name (`gta6`) or any new topic
+  (`Minecraft`, `street food`). Search terms are derived from the
+  name — the name plus `<name> gameplay` and `<name> walkthrough` —
+  unless the topic defines explicit `search_terms`. Creators default
+  to none (term search only) unless `--creators` is given, and the
+  Twitch game defaults to the topic name. GTA 6 with no `--topic`
+  behaves exactly as v1.1.
+- **`--game <name>`** overrides the Twitch game for one run (empty
+  string = skip Twitch). **`--creators "A,B"`** overrides the
+  creator list for one run.
+- **`topic:` / `presets:` in config.yaml**: the active topic and
+  named presets. The `gta6` preset holds the exact v1 values
+  (search terms, the 14 creators, the Twitch game, the exclude
+  list). Old configs with top-level `search_terms` / `creators`
+  still work — the topic resolver falls back to them.
+- **Hooks and digests are topic-aware**: the hook strips the active
+  topic name from the title, and the digest title and Twitch note
+  name the topic.
 
 ## v1.1 fixes (2026-11-19, GPT review — approved by Shariar)
 
@@ -55,11 +89,12 @@ RAM is ~600 MB free and both are heavy.
 
 ## The 5 stages
 
-1. **Discover** — `discover.py` searches YouTube (no API key needed) for
-   GTA 6 gameplay + a creator watchlist, ranks candidates by **views/hour**
-   (views / hours since upload). Twitch top clips in the GTA VI category
-   come from the Helix API when keys are configured; without keys Twitch
-   is skipped and says so — no data is ever faked.
+1. **Discover** — `discover.py` searches YouTube (no API key needed)
+   for the active topic's search terms + a creator watchlist, ranks
+   candidates by **views/hour** (views / hours since upload). Twitch
+   top clips for the topic's game come from the Helix API when keys
+   are configured; without keys Twitch is skipped and says so — no
+   data is ever faked.
 2. **Download the moment only** — `clip.py` uses yt-dlp
    `--download-sections` so a 45-second slice of a 12-hour VOD downloads
    ~45 seconds of fragments, never the whole stream. Full VODs would not
@@ -103,16 +138,22 @@ certifi's bundle; verification stays enabled.
 ## Usage
 
 ```bash
-# Full run: discover -> pick top 3 -> clip -> digest
+# Full run: discover -> pick top 3 -> clip -> digest (default topic: GTA 6)
 ./venv/bin/python run_pipeline.py --clips 3
+
+# Any topic: Minecraft (game — Twitch works, game name defaults to "Minecraft")
+./venv/bin/python run_pipeline.py --topic "Minecraft" --clips 3 --dry-run
+
+# Any topic: street food (non-game — YouTube-only, Twitch is skipped)
+./venv/bin/python run_pipeline.py --topic "street food" --clips 3
 
 # Discovery only (what would be clipped, no downloads)
 ./venv/bin/python run_pipeline.py --clips 3 --dry-run
 
-# Discovery alone
-./venv/bin/python discover.py
+# Discovery alone, for one topic
+./venv/bin/python discover.py --topic "Minecraft"
 
-# Verify a candidate window shows gameplay before committing to a
+# Verify a candidate window shows the content before committing to a
 # full segment download (fast — one frame via HTTP range seek):
 ./venv/bin/python probe.py discovery/discovery-2026-11-19-0804.json 1800
 # -> verify/probe-<video_id>-t1800.jpg  (look at it; if it is a loading
@@ -120,12 +161,52 @@ certifi's bundle; verification stays enabled.
 
 # One clip by hand
 ./venv/bin/python clip.py --url <youtube-url> --start 65 --end 110 \
-    --hook "KAI CENAT LOSES IT" --out kai-cenat-gta6-01
+    --hook "KAI CENAT LOSES IT" --out kai-cenat-01
 ```
+
+## Topics
+
+The topic decides what discovery searches for. Precedence:
+**CLI flags > config `topic:` block > `gta6` preset** (the default).
+
+- `--topic gta6` — the GTA 6 preset, exactly the v1 values: search
+  terms `GTA 6 gameplay` / `GTA VI gameplay`, the 14 launch-day
+  creators, Twitch game `Grand Theft Auto VI`, the DarkViperAU
+  exclusion. A run with no `--topic` is identical to this.
+- `--topic "Minecraft"` — an ad-hoc topic, no config edit needed.
+  Search terms are derived: `Minecraft`, `Minecraft gameplay`,
+  `Minecraft walkthrough`. No creators (term search only) unless
+  `--creators` is passed. Twitch game defaults to `Minecraft`.
+- `--topic "street food"` — a non-game topic. Terms are derived the
+  same way (`street food`, `street food gameplay`, `street food
+  walkthrough` — the gameplay/walkthrough terms return little for a
+  non-game topic and are harmless). Twitch game defaults to
+  `street food`, which finds no Twitch game, so Twitch is skipped
+  gracefully — the run is YouTube-only.
+- `--topic "Biryani" --creators "Food Insider,Mark Wiens"` — an
+  ad-hoc topic with a creator list for one run.
+- `--topic "Minecraft" --game ""` — force a YouTube-only run even
+  though the topic has a Twitch game.
+
+To make a topic permanent, add it to `config.yaml` — either as the
+`topic:` block (the default when no `--topic` is passed) or as a
+named entry under `presets:` (then `--topic <name>` loads it whole).
+A topic block can set explicit `search_terms` (skips derivation),
+`suffixes:` to replace the default `["gameplay", "walkthrough"]`
+derivation, `extra_terms:` for additional literal terms, `creators:`,
+`twitch_game:` (blank `""` = YouTube-only), `hook_strip:` (words
+stripped from titles when building the hook), and
+`exclude_video_ids:`.
+
+**Unchanged limits:** Twitch discovery needs a game/category name —
+a topic with no matching Twitch game is YouTube-only. Moment
+selection is still the fixed window (see below); topics do not
+change how a moment is picked, only what is searched for.
 
 ## Config (`config.yaml`)
 
-- `search_terms` / `creators` — what discovery searches for.
+- `topic:` / `presets:` — what discovery searches for (see Topics).
+  `presets.gta6` holds the exact v1 values.
 - `discovery.max_age_hours` (72) / `min_duration_s` (60) — candidate filters.
 - `clips.length_s` (45), `width`/`height` (1080x1920), `fps` (30),
   `crf` (21) — output settings.
@@ -135,9 +216,10 @@ certifi's bundle; verification stays enabled.
   transcribe 900s, ffmpeg 600s, ffprobe 120s, clip subprocess 3600s).
 - `paths.transcribe_venv_python` — Python with faster-whisper
   installed (default `~/workspace/transcribe-venv/bin/python`).
-- `exclude_video_ids` — YouTube IDs to skip when picking clips. Add a
-  video here after probing shows its window is not gameplay (e.g. a
-  pre-launch countdown stream); the next-ranked candidate takes its slot.
+- `topic.exclude_video_ids` — YouTube IDs to skip when picking
+  clips. Add a video here after probing shows its window is not the
+  content (e.g. a pre-launch countdown stream); the next-ranked
+  candidate takes its slot.
 - `twitch.client_id` / `client_secret` — leave blank to skip Twitch.
 - `commentary.enabled` / `commentary.audio` — see below.
 
@@ -174,7 +256,7 @@ Clips ship with source audio only unless commentary is supplied.
 Record a commentary audio file the same length as the clip, then
 either set `commentary.enabled: true` and `commentary.audio: <path>`
 in `config.yaml`, or pass `--commentary <file>` to `clip.py` (the
-flag wins) — the game audio is ducked to 45% under it. If commentary
+flag wins) — the source audio is ducked to 45% under it. If commentary
 is requested but the file is missing, the run fails loudly before
 any download. No synthetic voiceover is generated by the pipeline;
 voice and language are Shariar's call.
@@ -215,6 +297,7 @@ and synthetic media only, except one small dry-run discovery):
 ```bash
 ./tests/gen_test_media.sh            # synthetic 12s segment + tones
 ./venv/bin/python tests/test_units.py
+./venv/bin/python tests/test_topics.py
 cd tests && ../venv/bin/python test_clip_e2e.py
 ./venv/bin/python tests/test_run_wiring.py
 ./venv/bin/python tests/test_lock.py
