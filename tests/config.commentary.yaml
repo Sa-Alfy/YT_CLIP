@@ -1,0 +1,49 @@
+# Test config with commentary enabled via config (not --commentary).
+# Same as config.test.yaml except commentary points at the test tone.
+search_terms:
+  - "GTA 6 gameplay"
+creators:
+  - Kai Cenat
+
+discovery:
+  search_results: 3
+  creator_results: 1
+  max_age_hours: 72
+  min_duration_s: 60
+  full_fetch_limit: 5
+  sleep_between_searches_s: 1.0
+
+clips:
+  length_s: 12
+  width: 720
+  height: 1280
+  fps: 30
+  crf: 28
+  audio_bitrate: 96k
+  hook_duration_s: 2
+  subtitles: false
+  whisper_model: tiny
+  whisper_language: en
+
+timeouts:
+  download_s: 60
+  transcribe_s: 60
+  ffmpeg_s: 120
+  ffprobe_s: 30
+  clip_subprocess_s: 300
+
+paths:
+  discovery: out-discovery
+  clips: out-clips
+  segments: out-segments
+  transcribe_venv_python: ~/workspace/transcribe-venv/bin/python
+
+twitch:
+  client_id: ""
+  client_secret: ""
+  game_name: "Grand Theft Auto VI"
+  top_clips: 10
+
+commentary:
+  enabled: true
+  audio: media/commentary-12s.wav

@@ -1,0 +1,91 @@
+# GTA 6 viral clip pipeline — config
+# Copy to config.local.yaml and edit for your own run; config.yaml ships with defaults.
+
+search_terms:
+  - "GTA 6 gameplay"
+  - "GTA VI gameplay"
+
+# Creator watchlist for discovery (YouTube search per creator).
+# These are the big launch-day names; add/remove freely.
+creators:
+  - Kai Cenat
+  - IShowSpeed
+  - caseoh_
+  - Valkyrae
+  - StableRonaldo
+  - TheBurntPeanut
+  - ElMariana
+  - DarkViperAU
+  - Caylus
+  - Jelly
+  - Rivers
+  - Jake Baldino
+  - Cinna
+  - Payal Gaming
+
+discovery:
+  search_results: 12        # results per search term
+  creator_results: 2        # results per creator search
+  max_age_hours: 72         # only videos uploaded within this window
+  min_duration_s: 60        # skip videos shorter than this
+  full_fetch_limit: 40      # full metadata fetches (top N by raw views)
+  sleep_between_searches_s: 1.0
+
+# Videos to skip when picking clips (YouTube video IDs). Add a video here
+# after probing shows its window is not gameplay — the next-ranked
+# candidate takes its slot. probe.py verifies windows before a run.
+# - KsNI7DeozPA (DarkViperAU, "The BEST GTA VI LAUNCH..."): pre-launch
+#   countdown stream; at 1800s it still showed a "releases in 0:39:43"
+#   countdown, at 4800s the in-game settings menu. No gameplay in the
+#   first ~80 min, so it is excluded from v1 picks.
+exclude_video_ids:
+  - KsNI7DeozPA
+
+clips:
+  length_s: 45              # target clip length (30-60)
+  width: 1080
+  height: 1920
+  fps: 30
+  crf: 21
+  audio_bitrate: 128k
+  hook_duration_s: 3        # hook text shown for the first N seconds
+  subtitles: true           # burn in subtitles via faster-whisper (tiny)
+  whisper_model: tiny
+  whisper_language: en      # explicit language (no auto-detect — game
+                            # audio + streamer chatter confuses it)
+
+# Subprocess timeouts (seconds, v1.1). A stage that exceeds its timeout
+# is killed (whole process group) and that clip fails — the run never
+# hangs. clip_subprocess_s must cover download + transcribe + ffmpeg
+# inside one clip.py call, so it is the largest.
+timeouts:
+  download_s: 1800          # yt-dlp segment download (throttled egress)
+  transcribe_s: 900
+  ffmpeg_s: 600
+  ffprobe_s: 120
+  clip_subprocess_s: 3600   # run_pipeline -> clip.py
+
+paths:
+  discovery: discovery
+  clips: clips
+  segments: segments
+  # Python with faster-whisper installed (shared transcribe venv).
+  transcribe_venv_python: ~/workspace/transcribe-venv/bin/python
+
+# Twitch Helix discovery (top clips in the GTA VI category).
+# Leave blank to skip Twitch gracefully — no data is faked.
+# Get keys at https://dev.twitch.tv/console (free).
+twitch:
+  client_id: ""
+  client_secret: ""
+  game_name: "Grand Theft Auto VI"
+  top_clips: 10
+
+# Commentary / reaction track (the format that keeps a clip channel alive).
+# v1 ships clips with source audio only; a commentary track is mixed in
+# here once recorded. Set enabled: true and point `audio` at a WAV/MP3
+# of the same length as the clip, and clip.py will duck the game audio
+# under it. See README.md.
+commentary:
+  enabled: false
+  audio: null
