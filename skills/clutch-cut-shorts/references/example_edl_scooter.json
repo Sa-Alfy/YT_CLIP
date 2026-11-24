@@ -1,0 +1,400 @@
+{
+  "audio": {
+    "allowed_inputs": [
+      "work/source/vod_window.mp4"
+    ],
+    "loudnorm_I": -14,
+    "tts": false
+  },
+  "beats": [
+    {
+      "beat_id": "b1",
+      "description": "Cold open on the end of the respawn reaction",
+      "required": true,
+      "role": "hook"
+    },
+    {
+      "beat_id": "b2",
+      "description": "Spots and steals the scooter",
+      "required": true,
+      "role": "setup"
+    },
+    {
+      "beat_id": "b3",
+      "description": "Cops notice, chase starts",
+      "required": true,
+      "role": "escalation"
+    },
+    {
+      "beat_id": "b4",
+      "description": "Tackled and arrested",
+      "required": true,
+      "role": "climax"
+    },
+    {
+      "beat_id": "b5",
+      "description": "BUSTED screen",
+      "required": true,
+      "role": "consequence"
+    },
+    {
+      "beat_id": "b6",
+      "description": "Respawn and reaction; sentence cut mid-phrase to loop",
+      "required": true,
+      "role": "payoff"
+    }
+  ],
+  "caption_policy": {
+    "glossary_overrides": {},
+    "max_punch_ratio": 0.25,
+    "source": "whisper_final_audio",
+    "unit": "word",
+    "uppercase": true
+  },
+  "chain": [
+    {
+      "event_id": "e1",
+      "label": "Takes the scooter",
+      "min_visible_s": 1.0,
+      "role": "cause",
+      "src_in": 44.8,
+      "src_out": 46.2
+    },
+    {
+      "event_id": "e2",
+      "label": "Wanted level rises, cops engage",
+      "min_visible_s": 1.0,
+      "role": "cause",
+      "src_in": 57.0,
+      "src_out": 58.5
+    },
+    {
+      "event_id": "e3",
+      "label": "Tackled and arrested",
+      "min_visible_s": 1.5,
+      "role": "event",
+      "src_in": 73.1,
+      "src_out": 75.0
+    },
+    {
+      "event_id": "e4",
+      "label": "BUSTED screen",
+      "min_visible_s": 2.5,
+      "role": "consequence",
+      "src_in": 75.0,
+      "src_out": 78.4
+    },
+    {
+      "event_id": "e5",
+      "label": "Respawn",
+      "min_visible_s": 1.5,
+      "role": "consequence",
+      "src_in": 90.0,
+      "src_out": 92.0
+    }
+  ],
+  "created_at": "2026-11-20T05:00:00+06:00",
+  "edl_id": "clutchcut-ishowspeed-scooter-bust-001",
+  "hook": {
+    "rationale": "Short hook names the pictureable thing in frame 1; viewer waits for the bust.",
+    "text": "GRANDMA'S SCOOTER",
+    "full_title": "SPEED STOLE A GRANDMA'S SCOOTER"
+  },
+  "layout": {
+    "caption_y_pct": 62,
+    "facecam": {
+      "dst": {
+        "h": 720,
+        "w": 1080,
+        "x": 0,
+        "y": 0
+      },
+      "src_crop": {
+        "h": 320,
+        "w": 480,
+        "x": 1440,
+        "y": 0
+      },
+      "upscale_factor": 2.25
+    },
+    "gameplay": {
+      "dst": {
+        "h": 1200,
+        "w": 1080,
+        "x": 0,
+        "y": 720
+      },
+      "src_crop": {
+        "h": 1080,
+        "w": 972,
+        "x": 430,
+        "y": 0
+      }
+    }
+  },
+  "loop": {
+    "description": "s5 ends mid-sentence at src 102.6; s1 begins at src 102.6 and completes it.",
+    "head_seg": "s1",
+    "tail_seg": "s5",
+    "type": "continuation_loop"
+  },
+  "moment": {
+    "central_event_id": "e3",
+    "criteria": [
+      {
+        "id": "c1",
+        "name": "Surprise",
+        "score": 2
+      },
+      {
+        "id": "c2",
+        "name": "Clear visual moment",
+        "score": 2
+      },
+      {
+        "id": "c3",
+        "name": "Strong streamer reaction",
+        "score": 2
+      },
+      {
+        "id": "c4",
+        "name": "Visible consequence",
+        "score": 2
+      },
+      {
+        "id": "c5",
+        "name": "Stakes",
+        "score": 2
+      },
+      {
+        "id": "c6",
+        "name": "Loop potential",
+        "score": 1
+      },
+      {
+        "id": "c7",
+        "name": "Shareability",
+        "score": 1
+      }
+    ],
+    "threshold": 10,
+    "total": 12
+  },
+  "schema_version": "1.0",
+  "segments": [
+    {
+      "audio_fade_ms": 0,
+      "beat_id": "b1",
+      "cut_in": {
+        "evidence": "s5 ends mid-sentence at src 102.6; s1 continues the same sentence",
+        "type": "loop_continuation"
+      },
+      "cut_out": {
+        "evidence": "VAD gap 105.00-105.42",
+        "type": "silence"
+      },
+      "final_in": 0,
+      "final_out": 2.4,
+      "game_speech_risk": "none",
+      "reason": "Cold open on the end of the respawn reaction so the loop completes the sentence; cuts in on the loop continuation at 102.6 and out on silence after the sentence ends.",
+      "seg_id": "s1",
+      "speed": 1.0,
+      "src_in": 102.6,
+      "src_out": 105.0,
+      "streamer_speaking_expected": true
+    },
+    {
+      "audio_fade_ms": 0,
+      "beat_id": "b2",
+      "cut_in": {
+        "evidence": "VAD gap 42.61-43.10",
+        "type": "silence"
+      },
+      "cut_out": {
+        "evidence": "Word gap 49.00-49.09",
+        "type": "word_boundary"
+      },
+      "final_in": 2.4,
+      "final_out": 8.4,
+      "game_speech_risk": "none",
+      "reason": "Full steal including chain event e1, from the moment Speed spots the scooter to the getaway; cuts in on silence before he grabs it and out on a word boundary.",
+      "seg_id": "s2",
+      "speed": 1.0,
+      "src_in": 43.0,
+      "src_out": 49.0,
+      "streamer_speaking_expected": true
+    },
+    {
+      "audio_fade_ms": 0,
+      "beat_id": "b3",
+      "cut_in": {
+        "evidence": "VAD gap 56.10-56.50",
+        "type": "silence"
+      },
+      "cut_out": {
+        "evidence": "Word gap 62.50-62.58",
+        "type": "word_boundary"
+      },
+      "final_in": 8.4,
+      "final_out": 14.4,
+      "game_speech_risk": "radio",
+      "reason": "Wanted level rises and the chase starts, chain event e2; cuts in on silence as the sirens begin and out on a word boundary before the tackle.",
+      "seg_id": "s3",
+      "speed": 1.0,
+      "src_in": 56.5,
+      "src_out": 62.5,
+      "streamer_speaking_expected": true
+    },
+    {
+      "audio_fade_ms": 0,
+      "beat_id": "b4",
+      "cut_in": {
+        "evidence": "VAD gap 70.90-71.20",
+        "type": "silence"
+      },
+      "cut_out": {
+        "evidence": "BUSTED overlay appears at 75.0",
+        "type": "scene_change"
+      },
+      "final_in": 14.4,
+      "final_out": 18.2,
+      "game_speech_risk": "none",
+      "reason": "Tackle and arrest, central event e3; cuts in on silence as the cops close in and out on the scene change to the BUSTED overlay at 75.0.",
+      "seg_id": "s4a",
+      "speed": 1.0,
+      "src_in": 71.2,
+      "src_out": 75.0,
+      "streamer_speaking_expected": true
+    },
+    {
+      "audio_fade_ms": 0,
+      "beat_id": "b5",
+      "cut_in": {
+        "evidence": "BUSTED overlay appears at 75.0",
+        "type": "scene_change"
+      },
+      "cut_out": {
+        "evidence": "VAD gap 79.00-79.35",
+        "type": "silence"
+      },
+      "final_in": 18.2,
+      "final_out": 22.2,
+      "game_speech_risk": "none",
+      "reason": "BUSTED screen held in full with Speed reacting, chain event e4; cuts in on the scene change from the arrest and out on silence into the fade to black.",
+      "seg_id": "s4b",
+      "speed": 1.0,
+      "src_in": 75.0,
+      "src_out": 79.0,
+      "streamer_speaking_expected": true
+    },
+    {
+      "audio_fade_ms": 0,
+      "beat_id": "b6",
+      "cut_in": {
+        "evidence": "Respawn loads at 90.0",
+        "type": "scene_change"
+      },
+      "cut_out": {
+        "evidence": "Sentence cut mid-phrase at 102.6; s1 completes it",
+        "type": "loop_continuation"
+      },
+      "final_in": 22.2,
+      "final_out": 34.8,
+      "game_speech_risk": "none",
+      "reason": "Respawn and reaction, chain event e5, running to the loop point; cuts in on the scene change at respawn and out mid-sentence on the loop continuation into s1.",
+      "seg_id": "s5",
+      "speed": 1.0,
+      "src_in": 90.0,
+      "src_out": 102.6,
+      "streamer_speaking_expected": true
+    }
+  ],
+  "skips": [
+    {
+      "contains_chain_event": false,
+      "reason": "Slow scooter escape after the steal; no chain event \u2014 the wanted-level rise (e2) starts at 57.0",
+      "src_in": 49.0,
+      "src_out": 56.5
+    },
+    {
+      "contains_chain_event": false,
+      "reason": "Chase and confrontation before the tackle; no chain event \u2014 the tackle (e3) starts at 73.1",
+      "src_in": 62.5,
+      "src_out": 71.2
+    },
+    {
+      "contains_chain_event": false,
+      "reason": "Fade-to-black and load, no speech, no events",
+      "src_in": 79.0,
+      "src_out": 90.0
+    }
+  ],
+  "source": {
+    "fps": 60,
+    "height": 1080,
+    "local_file": "work/source/vod_window.mp4",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "source_type": "twitch_vod",
+    "vod_offset_s": 7860.0,
+    "vod_url": "https://www.twitch.tv/videos/0000000000",
+    "width": 1920
+  },
+  "target": {
+    "duration_s": 34.8,
+    "fps": 30,
+    "height": 1920,
+    "max_s": 38,
+    "min_s": 16,
+    "width": 1080
+  },
+  "timeline_map": [
+    {
+      "final_in": 0,
+      "final_out": 2.4,
+      "offset": -102.6,
+      "seg_id": "s1",
+      "src_in": 102.6,
+      "src_out": 105.0
+    },
+    {
+      "final_in": 2.4,
+      "final_out": 8.4,
+      "offset": -40.6,
+      "seg_id": "s2",
+      "src_in": 43.0,
+      "src_out": 49.0
+    },
+    {
+      "final_in": 8.4,
+      "final_out": 14.4,
+      "offset": -48.1,
+      "seg_id": "s3",
+      "src_in": 56.5,
+      "src_out": 62.5
+    },
+    {
+      "final_in": 14.4,
+      "final_out": 18.2,
+      "offset": -56.8,
+      "seg_id": "s4a",
+      "src_in": 71.2,
+      "src_out": 75.0
+    },
+    {
+      "final_in": 18.2,
+      "final_out": 22.2,
+      "offset": -56.8,
+      "seg_id": "s4b",
+      "src_in": 75.0,
+      "src_out": 79.0
+    },
+    {
+      "final_in": 22.2,
+      "final_out": 34.8,
+      "offset": -67.8,
+      "seg_id": "s5",
+      "src_in": 90.0,
+      "src_out": 102.6
+    }
+  ]
+}
